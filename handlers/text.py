@@ -11,6 +11,6 @@ def get_text_messages(message):
 	elif message.text == "Bestdeal" or message.text == '/bestdeal':
 		bestdeal.bestdeal_menu(message)
 	elif message.text == "History" or message.text == '/history':
-		history.history_menu(message)
+		history.history_get(message)
 	elif message.text == "Привет":
 		bot.send_message(message.from_user.id, "Привет, чем я могу тебе помочь?")
