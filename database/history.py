@@ -1,159 +1,153 @@
 import sqlite3 as sq
 import os
-from loader import bot
 import datetime
-
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 database_path = os.path.join(os.path.abspath("database"), "bot_history.db")
 
 
-def low_high_history_add(user_id, command, city, hotel_info, photo_count=None,
-                         date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
-    try:
-        with sq.connect(database_path) as con:
-            cur = con.cursor()
-            try:
-                cur.execute("DELETE from bestdeal_history WHERE user_id = ?", (user_id,))
-            except:
-                pass
-            if cur.execute("SELECT command, city, hotels_count, photo_count, date FROM history WHERE user_id = ?", (user_id,)).fetchone() == None:
-                # converted_photo = convert_to_binary_data(hotel_photos)
-                column_values = (user_id, command, city, hotel_info, photo_count, date)
-                cur.execute("INSERT INTO history VALUES(?, ?, ?, ?, ?, ?)", column_values)
-            else:
-                try:
-                    sqlite_update_query = """UPDATE history SET command = ?, city = ?, hotels_count = ?, photo_count = ?, date = ? where user_id = ?"""
-                    column_values = (command, city, hotel_info, photo_count, date, user_id)
-                    cur.execute(sqlite_update_query, column_values)
-                except Exception:
-                    print("Не удалось перезаписать {}".format(user_id))
-            # cur.execute("DROP TABLE IF EXISTS history")
-            # cur.execute("""CREATE TABLE IF NOT EXISTS history (
-            # 	user_id TEXT PRIMARY KEY,
-            # 	command TEXT,
-            # 	city TEXT,
-            # 	hotels_count TEXT,
-            # 	hotels_photo BLOB,
-            #     photo_count INTEGER,
-            # 	date datetime
-            # )""")
-    except sq.Error as error:
-        print("Ошибка при подключении к sqlite", error)
+def database_create():
+	try:
+		with sq.connect(database_path) as con:
+			cur = con.cursor()
+			cur.execute("""CREATE TABLE IF NOT EXISTS users (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				user_id TEXT UNIQUE NOT NULL
+            )""")
+			cur.execute("""CREATE TABLE IF NOT EXISTS history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                hotel_info TEXT NOT NULL,
+                photo_urls TEXT DEFAULT NULL,
+                date datetime
+            )""")
+	except sq.Error as error:
+		print("Ошибка при подключении к sqlite", error)
 
 
-def best_history_add(user_id, command, city, min_price, max_price, min_distance, max_distance,
-                     hotel_info, photo_count=None, date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
-    try:
-        with sq.connect(database_path) as con:
-            cur = con.cursor()
-            try:
-                cur.execute("DELETE FROM history WHERE user_id = ?", (user_id,))
-            except:
-                pass
-            if cur.execute("SELECT command, city, min_price, max_price, min_distance, max_distance, hotels_count, \
-            photo_count, date FROM bestdeal_history WHERE user_id = ?", (user_id,)).fetchone() == None:
-                # converted_photo = convert_to_binary_data(hotel_photos)
-                column_values = (user_id, command, city, min_price, max_price, min_distance,
-                                 max_distance, hotel_info, photo_count, date)
-                cur.execute("INSERT INTO bestdeal_history VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", column_values)
-            else:
-                try:
-                    sqlite_update_query = """UPDATE bestdeal_history SET command = ?, city = ?, min_price = ?, max_price = ?,
-                    min_distance = ?, max_distance = ?, hotels_count = ?, photo_count = ?, date = ? where user_id = ?"""
-                    column_values = (command, city, min_price, max_price, min_distance,
-                                 max_distance, hotel_info, photo_count, date, user_id)
-                    cur.execute(sqlite_update_query, column_values)
-                except Exception:
-                    print("Не удалось перезаписать {}".format(user_id))
-            # cur.execute("DROP TABLE IF EXISTS bestdeal_history")
-            # cur.execute("""CREATE TABLE IF NOT EXISTS bestdeal_history (
-            #     user_id TEXT PRIMARY KEY,
-            #     command TEXT,
-            #     city TEXT,
-            #     min_price INTEGER,
-            #     max_price INTEGER,
-            #     min_distance INTEGER,
-            #     max_distance INTEGER,
-            #     hotels_count TEXT,
-            #     photo_count INTEGER,
-            #     date datetime
-            # )""")
-    except sq.Error as error:
-        print("Ошибка при подключении к sqlite", error)
-        # hotels_photo BLOB,
+def show_history(search_id):
+	try:
+		with sq.connect(database_path) as con:
+			cur = con.cursor()
+			result = cur.execute("""SELECT hotel_info, photo_urls FROM history
+									WHERE id = ?""", (search_id,)).fetchone()
 
-# def readphoto(photo):
-# 	try:
-# 		with open() as f:
-# 			return f.read()
-# 	except IOError as e:
-# 		print(e)
-# 		return False
-# or
-# def convert_to_binary_data(filename):
-#     # Преобразование данных в двоичный формат
-#     with open(filename, 'rb') as file:
-#         blob_data = file.read()
-#     return blob_data
+			if len(result) == 0:
+				return "История пуста"
+			for info in result:
+
+				hotel_info = info[0]
+				if info[1] is not None:
+					photo_info = info[1]
+				if 'photo_info' in locals():
+					yield hotel_info, photo_info
+				else:
+					yield hotel_info
 
 
-# with sq.connect("bot_history.db") as con:
-#     cur = con.cursor()
-#     if cur.execute("SELECT command, hotels, date FROM history WHERE user_id = ?", ("3",)).fetchone() == None:
-#     else:
-#         row = cur.fetchone()
-#         print(row)
+	except sq.Error as error:
+		print("Ошибка при подключении к sqlite", error)
 
 
-@bot.message_handler(commands=['history'])
-def history_get(message):
-    try:
-        with sq.connect(database_path) as con:
-            cur = con.cursor()
-            try:
-                if (cur.execute("SELECT * FROM history WHERE user_id = ?", (message.from_user.id,)).fetchone() == None)\
-                        and\
-                        (cur.execute("SELECT * FROM bestdeal_history WHERE user_id = ?", (message.from_user.id,)).fetchone() == None):
-                    print("Вы еще ничего не искали.")
-                elif cur.execute("SELECT * FROM history WHERE user_id = ?", (message.from_user.id,)).fetchone() == None:
-                    cur.execute("SELECT command, city, min_price, max_price, min_distance, max_distance,\
-                                     hotels_count, photo_count, date FROM bestdeal_history WHERE user_id = ?",
-                                (message.from_user.id,))
-                    for res in cur:
-                        command = res[0]
-                        city = res[1]
-                        min_price, max_price, min_distance, max_distance = res[2], res[3], res[4], res[5],
-                        hotels_count = res[6]
-                        if res[7] != None:
-                            photo_count = res[7]
-                        date = res[8]
-                    # if 'photo_count' not in locals():
-                    #     return command, city, min_price, max_price, min_distance, max_distance, hotels_count, date
-                    # else:
-                    #     return command, city, min_price, max_price, min_distance, max_distance, hotels_count, photo_count, date
-                else:
-                    cur.execute("SELECT command, city, hotels_count, photo_count, date FROM history WHERE user_id = ?",
-                                (message.from_user.id,))
-                    for res in cur:
-                        command = res[0]
-                        city = res[1]
-                        hotels_count = res[2]
-                        if res[3] != None:
-                            photo_count = res[3]
-                        date = res[4]
-                        if 'photo_count' not in locals():
-                            msg = "{}, {}, {}, {}".format(command, city, hotels_count, date)
-                            # return command, city, hotels_count, date
-                        else:
-                            msg = "{}, {}, {}, {}, {}".format(command, city, hotels_count, photo_count, date)
-                            # return command, city, hotels_count, photo_count, date
-                        bot.send_message(message.chat.id, msg)
+def history_inline_keyboard(user_id):
+	"""
+	Клавиатура с кнопками - выбор действия с историей поиска.
+	:return: клавиатура InlineKeyboardMarkup
+	"""
+	keyboard = InlineKeyboardMarkup(row_width=1)
+	try:
+		for searching_id, command, hotel_info, photo_info, date_info in history_get(user_id):
+			keyboard.add(
+				InlineKeyboardButton(text=f'{command} - {date_info}', callback_data=f'search:{searching_id}')
+			)
+	except ValueError:
+		try:
+			for searching_id, command, hotel_info, date_info in history_get(user_id):
+				keyboard.add(
+					InlineKeyboardButton(text=f'{command} - {date_info}', callback_data=f'search:{searching_id}')
+				)
+		except ValueError:
+			return 'Вы пока что ничего не искали'
 
-                # # row = cur.fetchone()
-                # # return row
-            except Exception as e:
-                print("Не удалось загрузить историю user {}".format(message.from_user.id,), e)
-    except sq.Error as error:
-        print("Ошибка при подключении к sqlite", error)
+	return keyboard
+
+
+def history_get(user_id):
+	try:
+		with sq.connect(database_path) as con:
+			cur = con.cursor()
+			try:
+				try:
+					cur.execute("INSERT INTO users (user_id) VALUES (?)", (user_id,))
+				except Exception as exp:
+					if exp.args[0] == 'UNIQUE constraint failed: users.user_id':
+						pass
+				result = cur.execute("""SELECT h.id, h.command, h.hotel_info, h.photo_urls, h.date FROM history as h 
+										JOIN users ON users.id=h.user_id WHERE users.user_id = ?""", (user_id,)).fetchall()
+				if len(result) > 3:
+					cur.execute("""DELETE FROM history WHERE id = ?""", (result[0][0],))
+					result = cur.execute("""SELECT h.id, h.command, h.hotel_info, h.photo_urls, h.date FROM history as h 
+											JOIN users ON users.id=h.user_id WHERE users.user_id = ?""", (user_id,)).fetchall()
+
+				for info in result:
+					if info[2] is not None:
+						yield info
+					else:
+						info = list(info)
+						del info[2]
+						yield info
+					# command = info[0]
+					# hotel_info = info[1]
+					# if info[2] is not None:
+					# 	photo_info = info[2]
+					# date_info = info[3]
+					# if 'photo_info' in locals():
+					# 	yield command, hotel_info, photo_info, date_info
+					# else:
+					# 	yield command, hotel_info, date_info
+			except Exception as exp:
+				print(exp)
+
+
+	except sq.Error as error:
+		print("Ошибка при подключении к sqlite", error)
+
+
+def history_add(user_id, command, hotel_info, photos=None, date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
+	try:
+		with sq.connect(database_path) as con:
+			cur = con.cursor()
+			try:
+				cur.execute("INSERT INTO users (user_id) VALUES (?)", (user_id,))
+			except Exception as exp:
+				if exp.args[0] == 'UNIQUE constraint failed: users.user_id':
+					pass
+			table_user_id = cur.execute("SELECT id FROM users WHERE user_id = ?", (user_id,))
+			for value in table_user_id:
+				table_user_id = value[0]
+			count_notes = cur.execute("""SELECT id FROM history WHERE user_id = ?""", (table_user_id,)).fetchall()
+			if len(count_notes) > 3:
+				cur.execute("""DELETE FROM history WHERE id = ?""", (count_notes[0][0],))
+			column_values = (table_user_id, command, hotel_info, photos, date)
+			cur.execute("""INSERT INTO history (user_id, command, hotel_info,photo_urls, date) 
+                            VALUES(?, ?, ?, ?, ?)""", column_values)
+	except sq.Error as error:
+		print("Ошибка при подключении к sqlite", error)
+
+
+def delete_db():
+	try:
+		with sq.connect(database_path) as con:
+			cur = con.cursor()
+			cur.execute("DROP TABLE IF EXISTS history")
+			cur.execute("DROP TABLE IF EXISTS users")
+	except sq.Error as error:
+		print("Ошибка при подключении к sqlite", error)
+
+
+database_create()
 if __name__ == '__main__':
-    database_path = os.path.join(os.path.abspath("."), "bot_history.db")
+	database_path = os.path.join(os.path.abspath("."), "bot_history.db")
+	database_create()
+
