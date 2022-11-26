@@ -7,10 +7,7 @@ else:
     load_dotenv('.env.template')
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-headers = {
-    "RAPID_API_KEY": os.getenv('RAPID_API_KEY'),
-    "RAPID_API_HOST": "hotels4.p.rapidapi.com"
-}
+RAPID_API_KEY = os.getenv('RAPID_API_KEY')
 DEFAULT_COMMANDS = (
     ('lowprice', "Узнать топ самых дешёвых отелей в городе"),
     ('highprice', "Узнать топ самых дорогих отелей в городе"),
