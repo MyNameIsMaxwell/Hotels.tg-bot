@@ -1,2 +1,3 @@
 from . import misc
-from . import coordinates_calc
+from . import searching_hotels
+from . import set_bot_commands
