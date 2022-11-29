@@ -1,6 +1,7 @@
 import re
-from telebot.types import CallbackQuery
+from telebot.types import CallbackQuery, InputMediaPhoto
 
+from handlers import start
 from loader import bot
 from database import history
 
@@ -18,19 +19,34 @@ def process_history_reply(call: CallbackQuery) -> None:
 
     :param call: отклик клавиатуры.
     """
+
     search_id = re.search(r'\d+', call.data).group()
     try:
-        # with bot.retrieve_data(call.message.from_user.id, call.message.chat.id) as data:
         try:
-            hotel_info, photo_info= history.show_history(search_id)
-            # bot.send_media_group(call.message.chat.id, media=result)
+            for hotel_info, photo_info in history.show_history(search_id):
+                index = 0
+                hotels_list = re.findall(r"\[\'([^\[\]]+)\'\]", hotel_info.replace('"', "'"), flags=re.DOTALL)
+                photo_list = re.findall(r"\[\'([^\[\]]+)\'\]", photo_info.replace('"', "'"), flags=re.DOTALL)
+                for info in hotels_list:
+                    text = info.replace("\\n", "\n")
+                    if len(photo_list[index].split(",")) < 3:
+                        photos = [photo_list[index].replace("'", "").replace(" ", "")]
+                    else:
+                        photos = photo_list[index].replace("'", "").replace(" ", "").split(",")
+                    result = [InputMediaPhoto(media=url, caption=text) if index == 0
+                                else InputMediaPhoto(media=url) for index, url in enumerate(photos)]
+                    bot.send_media_group(call.message.chat.id, media=result)
+                    index += 1
         except ValueError:
             try:
                 for hotel_info in history.show_history(search_id):
-                    bot.send_message(call.message.chat.id, hotel_info, parse_mode="html")
-            # re.findall(r'\[\[([^\]]+?)\]', text)
+                    hotels_list = re.findall(r"\[\'([^\[\]]+)\'\]", hotel_info.replace('"', "'"), flags=re.DOTALL)
+                    for info in hotels_list:
+                        bot.send_message(call.message.chat.id, info.replace("\\n", "\n"), parse_mode="html")
             except ValueError:
                 message = history.history_get(call.message.from_user.id)
                 bot.send_message(call.message.chat.id, text=message)
-    except Exception:
+        start.bot_start(call.message)
+    except Exception as exp:
+        print(exp)
         bot.send_message(call.message.chat.id, text='Не могу загрузить историю поиска:')
