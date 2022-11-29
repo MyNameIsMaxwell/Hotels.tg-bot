@@ -1,10 +1,9 @@
-from loader import api_headers
 import re
 import requests
 from telebot.types import InputMediaPhoto
-
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from loader import api_headers
 
 def get_result_with_photos(hotel_id_value, hotels_photo_count, text):
     url = "https://hotels4.p.rapidapi.com/properties/get-hotel-photos"
@@ -42,30 +41,32 @@ def get_hotels_info(command, city_id, hotels_count, date_in, date_out, photo_cou
         querystring = {"destinationId": str(city_id), "pageNumber": "1", "pageSize": str(hotels_count), "checkIn": str(date_in),
                        "checkOut": str(date_out), "adults1": "1", "sortOrder": "PRICE_HIGHEST_FIRST", "locale": "ru_RU", "currency": "RUB"}
     response = requests.get(url, headers=api_headers, params=querystring)
-
     for hotel_id_value in response.json()["data"]["body"]["searchResults"]["results"]:
-        hotel_id = hotel_id_value["id"]
-        hotel_name = hotel_id_value["name"]
-        hotel_address = hotel_id_value["address"]["streetAddress"]
-        distance_from_center = hotel_id_value["landmarks"][0]["distance"]
-        days = date_out - date_in
-        price_one_day = hotel_id_value["ratePlan"]["price"]["current"]
-        num = re.findall(r'\d+', price_one_day)
-        sum_price = days.days * int(num[0] + num[1])
-        all_days_price = re.sub(r'(?<=\d)(?=(\d{3})+\b)', ',', str(sum_price)) + price_one_day[-4:]
-        hotel_url = 'https://www.hotels.com/ho' + str(hotel_id) + '/'
-        msg = (f"<b>Отель: {hotel_name}\n"
-               f"Адрес: {hotel_address}\n"
-               f"Расстояние до центра: {distance_from_center}\n"
-               f"Цена за 1 сутки: {price_one_day}\n"
-               f"Стоимость за {days.days} суток: {all_days_price}\n"
-               f"Подробнее об отеле: {hotel_url}\n</b>")
-        if int(photo_count) > 0:
-            text = msg.replace("<b>", '').replace("</b>", '')
-            result, photos = get_result_with_photos(hotel_id, photo_count, text)
-            yield result, photos, text
-        else:
-            yield [msg]
+        try:
+            hotel_id = hotel_id_value["id"]
+            hotel_name = hotel_id_value["name"]
+            hotel_address = hotel_id_value["address"]["streetAddress"]
+            distance_from_center = hotel_id_value["landmarks"][0]["distance"]
+            days = date_out - date_in
+            price_one_day = hotel_id_value["ratePlan"]["price"]["current"]
+            num = re.findall(r'\d+', price_one_day)
+            sum_price = days.days * int(num[0] + num[1])
+            all_days_price = re.sub(r'(?<=\d)(?=(\d{3})+\b)', ',', str(sum_price)) + price_one_day[-4:]
+            hotel_url = 'https://www.hotels.com/ho' + str(hotel_id) + '/'
+            msg = (f"<b>Отель: {hotel_name}\n"
+                   f"Адрес: {hotel_address}\n"
+                   f"Расстояние до центра: {distance_from_center}\n"
+                   f"Цена за 1 сутки: {price_one_day}\n"
+                   f"Стоимость за {days.days} суток: {all_days_price}\n"
+                   f"Подробнее об отеле: {hotel_url}\n</b>")
+            if int(photo_count) > 0:
+                text = msg.replace("<b>", '').replace("</b>", '')
+                result, photos = get_result_with_photos(hotel_id, photo_count, text)
+                yield result, photos, [text]
+            else:
+                yield [msg]
+        except KeyError:
+            pass
 
 
 def get_hotels_info_bestdeal(city_id, hotels_count, date_in, date_out,
@@ -105,7 +106,7 @@ def get_hotels_info_bestdeal(city_id, hotels_count, date_in, date_out,
                     hotels_counter += 1
                     text = msg.replace("<b>", '').replace("</b>", '')
                     result, photos = get_result_with_photos(hotel_id, photo_count, text)
-                    yield result, photos, text
+                    yield result, photos, [text]
                 else:
                     hotels_counter += 1
                     yield [msg]
@@ -159,7 +160,7 @@ def print_cities_bestdeal(cities):
     keyboard = InlineKeyboardMarkup(row_width=1)
     for city in cities:
         keyboard.add(InlineKeyboardButton(text=city['city_name'],
-                                              callback_data=f'bestdeal_id:{city["destination_id"]}'))
+                                            callback_data=f'bestdeal_id:{city["destination_id"]}'))
 
     keyboard.add(InlineKeyboardButton(text="Выйти в меню", callback_data='exit'))
     return keyboard
