@@ -214,10 +214,12 @@ def ready_for_answer_lowprice(message):
 			info_for_history.append(hotel_info)
 		history.history_add(user_id, "lowprice", str(info_for_history))
 	else:
+		photo_info_history = list()
 		for result, photos_url, text in get_hotels_info("lowprice", city_id, hotels_count, date_in, date_out, photo_count):
 			bot.send_media_group(message.chat.id, media=result)
-			info_for_history.append([user_id, text, photos_url])
-
+			info_for_history.append(text)
+			photo_info_history.append(photos_url)
+		history.history_add(user_id, "lowprice", str(info_for_history), str(photo_info_history))
 	start.bot_start(message)
 
 
