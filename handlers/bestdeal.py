@@ -62,7 +62,7 @@ def back_to_menu(call):
 @bot.message_handler(state=MyStates.price_to_bestdeal, is_digit=True)
 def price_to_get(message):
 	bot.send_message(message.chat.id,
-					 f"Введите расстояние в метрах, на котором может\n находиться отель от центра.")
+					 f"Введите расстояние в метрах, на котором может находиться отель от центра.")
 	bot.set_state(message.from_user.id, MyStates.dist_from_center_to_bestdeal, message.chat.id)
 	with bot.retrieve_data(message.from_user.id, message.chat.id) as data:
 		data['price_to'] = message.text
@@ -254,12 +254,14 @@ def ready_for_answer_bestdeal(message):
 		for hotel_info in get_hotels_info_bestdeal(city_id, hotel_count, date_in, date_out, max_distance, max_price):
 			bot.send_message(message.chat.id, hotel_info, parse_mode="html")
 			info_for_history.append(hotel_info)
+		history.history_add(user_id, "bestdeal", str(info_for_history))
 	else:
+		photo_info_history = list()
 		for hotel_info, photos_url, text in get_hotels_info_bestdeal(city_id, hotel_count, date_in, date_out, max_distance, max_price, photo_count):
 			bot.send_media_group(message.chat.id, media=hotel_info)
-			info_for_history.append([user_id, text, photos_url])
-	print(info_for_history)
-
+			info_for_history.append(text)
+			photo_info_history.append(photos_url)
+		history.history_add(user_id, "bestdeal", str(info_for_history), str(photo_info_history))
 	start.bot_start(message)
 
 
