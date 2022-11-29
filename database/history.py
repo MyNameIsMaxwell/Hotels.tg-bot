@@ -35,15 +35,13 @@ def show_history(search_id):
 
 			if len(result) == 0:
 				return "История пуста"
-			for info in result:
-
-				hotel_info = info[0]
-				if info[1] is not None:
-					photo_info = info[1]
-				if 'photo_info' in locals():
-					yield hotel_info, photo_info
-				else:
-					yield hotel_info
+			hotel_info = result[0]
+			if result[1] is not None:
+				photo_info = result[1]
+			if 'photo_info' in locals():
+				yield hotel_info, photo_info
+			else:
+				yield hotel_info
 
 
 	except sq.Error as error:
