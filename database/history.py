@@ -1,12 +1,20 @@
-import sqlite3 as sq
 import os
+import sqlite3 as sq
 import datetime
+from loguru import logger
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from typing import Tuple
 
 database_path = os.path.join(os.path.abspath("database"), "bot_history.db")
 
 
-def database_create():
+@logger.catch()
+def database_create() -> None:
+	"""
+	Функция создающая базы данных с таблицами users и history, если их нет.
+	Таблица users хранит информацию об id пользователей.
+	Таблица history хранит в текстовом виде информацию об отелях, фотографиях и ссылку на id пользователя.
+	"""
 	try:
 		with sq.connect(database_path) as con:
 			cur = con.cursor()
@@ -26,7 +34,14 @@ def database_create():
 		print("Ошибка при подключении к sqlite", error)
 
 
-def show_history(search_id):
+@logger.catch()
+def show_history(search_id: str):
+	"""
+	Функция получающая id записи таблицы history в БД и возвращающая информацию об отеле и ссылки на фото, если они имеются.
+	:param search_id:
+	:return: hotel_info, photo_info: (Union[str, str]) информацию об отеле и ссылки на фото, если они имеются.
+	:return: hotel_info: (str) информацию об отеле, если фотографий не имеется.
+	"""
 	try:
 		with sq.connect(database_path) as con:
 			cur = con.cursor()
@@ -42,15 +57,15 @@ def show_history(search_id):
 				yield hotel_info, photo_info
 			else:
 				yield hotel_info
-
-
 	except sq.Error as error:
 		print("Ошибка при подключении к sqlite", error)
 
 
-def history_inline_keyboard(user_id):
+@logger.catch()
+def history_inline_keyboard(user_id) -> InlineKeyboardMarkup:
 	"""
 	Клавиатура с кнопками - выбор действия с историей поиска.
+	:param user_id: (int) id пользователя, который проводит поиск истории.
 	:return: клавиатура InlineKeyboardMarkup
 	"""
 	keyboard = InlineKeyboardMarkup(row_width=1)
@@ -66,12 +81,20 @@ def history_inline_keyboard(user_id):
 					InlineKeyboardButton(text=f'{command} - {date_info}', callback_data=f'search:{searching_id}')
 				)
 		except ValueError:
-			return 'Вы пока что ничего не искали'
+			keyboard.add(
+				InlineKeyboardButton(text="История поиска пуста. Введите /help")
+			)
 
 	return keyboard
 
 
-def history_get(user_id):
+@logger.catch()
+def history_get(user_id: int) -> Tuple:
+	"""
+	Функция, которая выводит название команды и времени поиска для инлайн клавиатуры.
+	:param user_id: (int) id пользователя, который проводит поиск истории.
+	:return: info: (tuple) кортеж с информацией об истории поиска, без текста и фотографий.
+	"""
 	try:
 		with sq.connect(database_path) as con:
 			cur = con.cursor()
@@ -82,11 +105,13 @@ def history_get(user_id):
 					if exp.args[0] == 'UNIQUE constraint failed: users.user_id':
 						pass
 				result = cur.execute("""SELECT h.id, h.command, h.hotel_info, h.photo_urls, h.date FROM history as h 
-										JOIN users ON users.id=h.user_id WHERE users.user_id = ?""", (user_id,)).fetchall()
+										JOIN users ON users.id=h.user_id WHERE users.user_id = ?""",
+									 (user_id,)).fetchall()
 				if len(result) > 3:
 					cur.execute("""DELETE FROM history WHERE id = ?""", (result[0][0],))
 					result = cur.execute("""SELECT h.id, h.command, h.hotel_info, h.photo_urls, h.date FROM history as h 
-											JOIN users ON users.id=h.user_id WHERE users.user_id = ?""", (user_id,)).fetchall()
+											JOIN users ON users.id=h.user_id WHERE users.user_id = ?""",
+										 (user_id,)).fetchall()
 
 				for info in result:
 					if info[2] is not None:
@@ -95,24 +120,26 @@ def history_get(user_id):
 						info = list(info)
 						del info[2]
 						yield info
-					# command = info[0]
-					# hotel_info = info[1]
-					# if info[2] is not None:
-					# 	photo_info = info[2]
-					# date_info = info[3]
-					# if 'photo_info' in locals():
-					# 	yield command, hotel_info, photo_info, date_info
-					# else:
-					# 	yield command, hotel_info, date_info
 			except Exception as exp:
 				print(exp)
-
-
 	except sq.Error as error:
 		print("Ошибка при подключении к sqlite", error)
 
 
-def history_add(user_id, command, hotel_info, photos=None, date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")):
+@logger.catch()
+def history_add(user_id: int, command: str, hotel_info: str, photos: str = None,
+				date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) -> None:
+	"""
+	Функция, добавляющая запись с информацией о команде, которую использовал пользователь, отеле, фотографиях и дате
+	поиска в базу данных.
+	Проверяет есть ли пользователь в таблице users БД, если нет, то добавляет.
+	Если количество отелей в поиске пользователя больше трёх, то тот, который искался раньше всех.
+	:param user_id: (int) id пользователя.
+	:param command: (str) команда, по которой пользователь искал информацию.
+	:param hotel_info: (str) информация об отеле в виде строки.
+	:param photos: (str) url фотографий в виде строки.
+	:param date: (date) дата и время поиска.
+	"""
 	try:
 		with sq.connect(database_path) as con:
 			cur = con.cursor()
@@ -128,13 +155,15 @@ def history_add(user_id, command, hotel_info, photos=None, date=datetime.datetim
 			if len(count_notes) > 3:
 				cur.execute("""DELETE FROM history WHERE id = ?""", (count_notes[0][0],))
 			column_values = (table_user_id, command, hotel_info, photos, date)
-			cur.execute("""INSERT INTO history (user_id, command, hotel_info,photo_urls, date) 
+			cur.execute("""INSERT INTO history (user_id, command, hotel_info, photo_urls, date) 
                             VALUES(?, ?, ?, ?, ?)""", column_values)
 	except sq.Error as error:
 		print("Ошибка при подключении к sqlite", error)
 
 
+@logger.catch()
 def delete_db():
+	"""Функция удаляющая таблицы из БД"""
 	try:
 		with sq.connect(database_path) as con:
 			cur = con.cursor()
@@ -147,5 +176,3 @@ def delete_db():
 database_create()
 if __name__ == '__main__':
 	database_path = os.path.join(os.path.abspath("."), "bot_history.db")
-	database_create()
-
