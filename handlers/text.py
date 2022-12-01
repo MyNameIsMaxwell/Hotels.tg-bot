@@ -1,9 +1,17 @@
 from loader import bot
 from handlers import *
+from loguru import logger
 
 
 @bot.message_handler(content_types=['text'])
+@logger.catch()
 def get_text_messages(message):
+	"""
+	Функция, реагирующая на возможные варианты ввода пользователем желаемого варианта
+	для поиска,	и вызывающая функцию для начала поиска в данной категории.
+
+	:param message: сообщение Telegram
+	"""
 	if message.text == "Lowprice" or message.text == '/lowprice' or message.text == 'lowprice' or message.text == 'Lowprice💸':
 		lowprice.lowprice_menu(message)
 	elif message.text == "Highprice" or message.text == '/highprice' or message.text == 'highprice' or message.text == 'Highprice🏢' :
