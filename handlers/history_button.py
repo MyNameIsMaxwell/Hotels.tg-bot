@@ -1,5 +1,6 @@
 import re
 from telebot.types import CallbackQuery, InputMediaPhoto
+from loguru import logger
 
 from handlers import start
 from loader import bot
@@ -7,15 +8,25 @@ from database import history
 
 
 @bot.message_handler(commands=['history'])
+@logger.catch()
 def history_menu(message):
+    """Функция, реагирующая на команду 'history' и показывает клавиатуру с последними тремя запросами пользователя."""
     bot.send_message(message.from_user.id, "Ваша история поиска:",
                      reply_markup=history.history_inline_keyboard(message.from_user.id))
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('search:'))
+@logger.catch()
 def process_history_reply(call: CallbackQuery) -> None:
     """
-    Функция, реагирующая на нажатие кнопки с выбором действия.
+    Функция, реагирующая на нажатие кнопки при выборе истории запросов.
+    call.data хранит id записи выбранного варианта, который потом передает в функцию show_history, где, после ответа от
+    БД, получает информацию об отелях и фотографиях, обрабатывает ответ с помощью регулярных выражений и выводит результат
+    в чат с помощью InputMediaPhoto.
+    Если фотографий не было, то выдает ошибку ValueError, которая обрабатывается и вызывает функцию show_history, где,
+    после ответа от БД, получает информацию об отелях, обрабатывает ответ с помощью регулярных выражений и выводит
+    результат с помощью send_message.
+
 
     :param call: отклик клавиатуры.
     """
