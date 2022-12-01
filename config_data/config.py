@@ -15,3 +15,4 @@ DEFAULT_COMMANDS = (
     ('history', "Узнать историю поиска отелей "),
     ('help', "Вывести справку")
 )
+LOG_PATH = os.path.abspath(os.path.join('utils', 'logs.log'))
