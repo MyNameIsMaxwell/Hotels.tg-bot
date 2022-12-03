@@ -18,5 +18,5 @@ def bot_start(message):
     item4 = types.KeyboardButton("History🕰")
     markup.row(item1, item2, item3)
     markup.row(item4)
-    bot.send_message(message.chat.id, 'Выберите вариант:', reply_markup=markup)
+    bot.send_message(message.chat.id, 'Выберите вариант:↘️', reply_markup=markup)
 
