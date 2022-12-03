@@ -60,7 +60,7 @@ def choose_city(call: CallbackQuery) -> None:
 	with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data:
 		data['city_id'] = re.search(r'\d+', call.data).group()
 		data['city'] = [city['city_name'] for city in data['cities'] if city["destination_id"] == data['city_id']][0]
-	bot.send_message(call.message.chat.id, 'Введите желаемую максимальную стоимость комнаты за сутки в российских рублях:')
+	bot.send_message(call.message.chat.id, 'Введите желаемую максимальную стоимость комнаты за сутки в $:')
 
 
 @bot.callback_query_handler(lambda call: call.data == 'exit')
@@ -312,7 +312,6 @@ def calen(call: CallbackQuery) -> None:
 
 		with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data:
 			data['dateOut'] = result
-		bot.send_message(call.message.chat.id, "Ищем по запросу:\n")
 		ready_for_answer_bestdeal(call.message)
 		bot.delete_state(call.message.chat.id, call.message.chat.id)
 
@@ -329,18 +328,17 @@ def ready_for_answer_bestdeal(message: Message) -> None:
 	try:
 		info_for_history = list()
 		with bot.retrieve_data(message.chat.id, message.chat.id) as data:
-			msg = (f"<b>Город: {data['city']}\n"
-				   f"Длительность поездки: с {data['dateIn']} по {data['dateOut']}\n"
-				   f"Ценовой диапазон: 0 - {data['price_to']}\n"
-				   f"Расстояние от центра: 0 - {data['dist_from_center_to']}\n"			   
-				   f"Количество отелей: {data['hotels_count']}\n</b>")
+			msg = (f"<b>🏨Город: {data['city']}\n"
+				   f"📆Длительность поездки: с {data['dateIn']} по {data['dateOut']}\n"
+				   f"💰Ценовой диапазон: 0 - {data['price_to']}\n"
+				   f"🗺Расстояние от центра: 0 - {data['dist_from_center_to']}\n"			   
+				   f"🔢Количество отелей: {data['hotels_count']}\n</b>")
 			try:
-				photo_count_exist = f"Фотографии: {data['photo_count']} шт.\n</b>"
+				photo_count_exist = f"📷Фотографии: {data['photo_count']} шт.\n</b>"
 				msg = msg[:-4] + photo_count_exist
 				photo_count: int = data['photo_count']
 			except:
 				pass
-
 			user_id: int = data['user_id']
 			hotel_count: str = data['hotels_count']
 			date_in: date = data['dateIn']
@@ -350,11 +348,14 @@ def ready_for_answer_bestdeal(message: Message) -> None:
 			max_price: str = data['price_to']
 			max_distance: float = int(data['dist_from_center_to']) / 1000
 			bot.send_message(message.chat.id, msg, parse_mode="html")
-
+			bot.send_message(message.chat.id, "Ищем по запросу...")
 		if 'photo_count' not in locals():
 			for hotel_info in get_hotels_info_bestdeal(city_id, hotel_count, date_in, date_out, max_distance, max_price):
-				bot.send_message(message.chat.id, hotel_info, parse_mode="html")
-				info_for_history.append(hotel_info)
+				if hotel_info == str:
+					bot.send_message(message.chat.id, hotel_info, parse_mode="html")
+				else:
+					bot.send_message(message.chat.id, hotel_info, parse_mode="html")
+					info_for_history.append(hotel_info)
 			history.history_add(user_id, "bestdeal", str(info_for_history))
 		else:
 			photo_info_history = list()
@@ -362,6 +363,8 @@ def ready_for_answer_bestdeal(message: Message) -> None:
 				bot.send_media_group(message.chat.id, media=hotel_info)
 				info_for_history.append(text)
 				photo_info_history.append(photos_url)
+			if len(photo_info_history) < int(hotel_count):
+				bot.send_message(message.chat.id, "Это всё, что удалось найти🤷‍♂")
 			history.history_add(user_id, "bestdeal", str(info_for_history), str(photo_info_history))
 		start.bot_start(message)
 	except Exception as exp:
