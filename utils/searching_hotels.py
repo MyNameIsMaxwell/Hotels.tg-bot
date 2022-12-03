@@ -24,16 +24,9 @@ def get_result_with_photos(hotel_id_value: str, hotels_photo_count: int, text: s
     :return: None, если не удалось подключиться.
     """
     url = "https://hotels4.p.rapidapi.com/properties/v2/detail"
-
     payload = {"propertyId": hotel_id_value}
 
-    headers = {
-        "content-type": "application/json",
-        "X-RapidAPI-Key": config.RAPID_API_KEY,
-        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
-    }
-
-    response = requests.request("POST", url, json=payload, headers=headers)
+    response = requests.request("POST", url, json=payload, headers=api_headers)
     try:
         photos_urls = list()
         for hotel_photo_value in response.json()["data"]["propertyInfo"]["propertyGallery"]["images"]:
@@ -63,13 +56,8 @@ def get_address_info(hotel_id: str):
         "locale": "ru_RU",
         "propertyId": hotel_id
     }
-    headers = {
-        "content-type": "application/json",
-        "X-RapidAPI-Key": config.RAPID_API_KEY,
-        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
-    }
 
-    response = requests.request("POST", url, json=payload, headers=headers)
+    response = requests.request("POST", url, json=payload, headers=api_headers)
     hotel_address = response.json()["data"]["propertyInfo"]["summary"]["location"]["address"]["addressLine"]
     return hotel_address
 
@@ -97,13 +85,8 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
     """
     url = "https://hotels4.p.rapidapi.com/properties/v2/list"
     payload = payloads.low_high_price_payload(command, city_id, hotels_count, str(date_in), str(date_out))
-    headers = {
-        "content-type": "application/json",
-        "X-RapidAPI-Key": config.RAPID_API_KEY,
-        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
-    }
 
-    response = requests.request("POST", url, json=payload, headers=headers)
+    response = requests.request("POST", url, json=payload, headers=api_headers)
     try:
         for hotel_id_value in response.json()["data"]["propertySearch"]["properties"]:
             try:
@@ -163,13 +146,8 @@ def get_hotels_info_bestdeal(city_id: str, hotels_count: str, date_in: date,
     """
     url = "https://hotels4.p.rapidapi.com/properties/v2/list"
     payload = payloads.bestdeal_payload(city_id, int(hotels_count), int(price), str(date_in), str(date_out))
-    headers = {
-        "content-type": "application/json",
-        "X-RapidAPI-Key": config.RAPID_API_KEY,
-        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
-    }
 
-    response = requests.request("POST", url, json=payload, headers=headers)
+    response = requests.request("POST", url, json=payload, headers=api_headers)
 
     hotels_counter = 0  # счётчик количества найденных отелей.
 
@@ -223,7 +201,8 @@ def get_city_name_and_id(city: str) -> Union[List[Dict[str, str]], None]:
     """
     url = "https://hotels4.p.rapidapi.com/locations/v3/search"
     querystring = {"q": city, "locale": "ru_RU"}
-    hotels_api = requests.get(url, headers=api_headers, params=querystring)
+    headers = {"X-RapidAPI-Key": config.RAPID_API_KEY, "X-RapidAPI-Host": "hotels4.p.rapidapi.com"}
+    hotels_api = requests.get(url, headers=headers, params=querystring)
     if hotels_api.status_code == 200:
         cities = list()
         try:
