@@ -265,7 +265,6 @@ def calen(call: CallbackQuery) -> None:
 
 		with bot.retrieve_data(call.message.chat.id, call.message.chat.id) as data:
 			data['dateOut'] = result
-		bot.send_message(call.message.chat.id, "Ищем по запросу:\n")
 		ready_for_answer_highprice(call.message)
 		bot.delete_state(call.message.chat.id, call.message.chat.id)
 
@@ -281,11 +280,11 @@ def ready_for_answer_highprice(message: Message) -> None:
 	"""
 	info_for_history = list()
 	with bot.retrieve_data(message.chat.id, message.chat.id) as data:
-		msg = (f"<b>Город: {data['city']}\n"
-			   f"Длительность поездки: с {data['dateIn']} по {data['dateOut']}\n"
-			   f"Количество отелей: {data['hotels_count']}\n</b>")
+		msg = (f"<b>🏨Город: {data['city']}\n"
+			   f"📆Длительность поездки: с {data['dateIn']} по {data['dateOut']}\n"
+			   f"🔢Количество отелей: {data['hotels_count']}\n</b>")
 		try:
-			photo_count_exist = f"Фотографии: {data['photo_count']} шт.\n</b>"
+			photo_count_exist = f"📷Фотографии: {data['photo_count']} шт.\n</b>"
 			msg = msg[:-4] + photo_count_exist
 			photo_count: int = data['photo_count']
 		except:
@@ -297,7 +296,7 @@ def ready_for_answer_highprice(message: Message) -> None:
 		city_name: str = data['city']
 		city_id: str = data['city_id']
 		bot.send_message(message.chat.id, msg, parse_mode="html")
-
+		bot.send_message(message.chat.id, "Ищем по запросу...")
 	if 'photo_count' not in locals():
 		for hotel_info in get_hotels_info("highprice", city_id, hotels_count, date_in, date_out):
 			bot.send_message(message.chat.id, hotel_info, parse_mode="html")
