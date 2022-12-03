@@ -7,10 +7,12 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from loguru import logger
 
 from loader import api_headers
+from config_data import config
+from . import payloads
 
 
 @logger.catch()
-def get_result_with_photos(hotel_id_value: int, hotels_photo_count: int, text: str):
+def get_result_with_photos(hotel_id_value: str, hotels_photo_count: int, text: str):
     """
     Функция отправляет запрос на заданный url с параметром id отеля, десериализует, обрабатывает результат
     и получает список фотографий отеля, который преобразует в удобную для вывода в чат форму.
@@ -21,36 +23,62 @@ def get_result_with_photos(hotel_id_value: int, hotels_photo_count: int, text: s
     список со ссылками на фотографии отеля.
     :return: None, если не удалось подключиться.
     """
-    url = "https://hotels4.p.rapidapi.com/properties/get-hotel-photos"
+    url = "https://hotels4.p.rapidapi.com/properties/v2/detail"
 
-    querystring = {"id": str(hotel_id_value)}
+    payload = {"propertyId": hotel_id_value}
 
-    response = requests.get(url, headers=api_headers, params=querystring)
+    headers = {
+        "content-type": "application/json",
+        "X-RapidAPI-Key": config.RAPID_API_KEY,
+        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+    }
 
-    if response and response.text != '':
-        result = list()
-        photo_hotel_get = response.json()['hotelImages']
-        for photo in photo_hotel_get:
-            try:
-                photo_url = photo['baseUrl']
-                photo_size = [size['suffix'] for size in photo['sizes'] if size['suffix'] in ["z", "y"]][0]
-                result.append(photo_url.format(size=photo_size))
-            except Exception:
-                result = None
-        if len(result) >= hotels_photo_count:
-            photos_urls = result[:hotels_photo_count]
-            photo_mosaic = [InputMediaPhoto(media=url, caption=text) if index == 0
-                            else InputMediaPhoto(media=url) for index, url in enumerate(photos_urls)]
-            return photo_mosaic, photos_urls
-    else:
-        return None
+    response = requests.request("POST", url, json=payload, headers=headers)
+    try:
+        photos_urls = list()
+        for hotel_photo_value in response.json()["data"]["propertyInfo"]["propertyGallery"]["images"]:
+            photos_urls.append(hotel_photo_value["image"]["url"])
+            if len(photos_urls) >= hotels_photo_count:
+                photos_urls = photos_urls[:hotels_photo_count]
+                photo_mosaic = [InputMediaPhoto(media=url, caption=text) if index == 0
+                                else InputMediaPhoto(media=url) for index, url in enumerate(photos_urls)]
+                return photo_mosaic, photos_urls
+        else:
+            return None
+    except Exception:
+        print("Невозможно загрузить фото")
+
+
+@logger.catch()
+def get_address_info(hotel_id: str):
+    """
+    Функция отправляет запрос на заданный url с параметром id отеля, десериализует, обрабатывает результат
+    и получает адрес отеля.
+    :param hotel_id: (int) id отеля, по которому проводится поиск.
+    :return: hotel_address: (str) адрес отеля.
+    """
+    url = "https://hotels4.p.rapidapi.com/properties/v2/detail"
+    payload = {
+        "currency": "USD",
+        "locale": "ru_RU",
+        "propertyId": hotel_id
+    }
+    headers = {
+        "content-type": "application/json",
+        "X-RapidAPI-Key": config.RAPID_API_KEY,
+        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+    }
+
+    response = requests.request("POST", url, json=payload, headers=headers)
+    hotel_address = response.json()["data"]["propertyInfo"]["summary"]["location"]["address"]["addressLine"]
+    return hotel_address
 
 
 @logger.catch()
 def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date, date_out: date, photo_count: int = 0):
     """
-    Функция отправляет запрос на заданный url с заданными параметрами, десериализует, обрабатывает результат
-    и получает информацию об отелях в городе, найденном по его id в разделе "lowprice" and "highprice".
+    Функция отправляет запрос на заданный url с заданными параметрами, полученными из payload, десериализует, обрабатывает
+    результат и получает информацию об отелях в городе.
     Если пользователь ввел запрос с нахождением фотографий, то редактирует текст, согласно найденной информации об отеле
     и вызывает функцию, которая ищет фотографии отеля и возвращает их в готовом для вывода виде. И считает количество найденных отелей.
     Если пользователь ищет без фотографий, то возвращает текст поиска в виде списка, чтобы корректно его обработать в БД.
@@ -67,32 +95,31 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
     :return: text: List[str]] текст сообщения, если запрос без фотографий.
     :return: None
     """
-    url = "https://hotels4.p.rapidapi.com/properties/list"
-    if command == "lowprice":
-        querystring = {"destinationId": str(city_id), "pageNumber": "1", "pageSize": str(hotels_count),
-                       "checkIn": str(date_in), "checkOut": str(date_out), "adults1": "1",
-                       "sortOrder": "PRICE", "locale": "ru_RU", "currency": "RUB"}
-    elif command == "highprice":
-        querystring = {"destinationId": str(city_id), "pageNumber": "1", "pageSize": str(hotels_count),
-                       "checkIn": str(date_in), "checkOut": str(date_out), "adults1": "1",
-                       "sortOrder": "PRICE_HIGHEST_FIRST", "locale": "ru_RU", "currency": "RUB"}
-    response = requests.get(url, headers=api_headers, params=querystring)
+    url = "https://hotels4.p.rapidapi.com/properties/v2/list"
+    payload = payloads.low_high_price_payload(command, city_id, hotels_count, str(date_in), str(date_out))
+    headers = {
+        "content-type": "application/json",
+        "X-RapidAPI-Key": config.RAPID_API_KEY,
+        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+    }
+
+    response = requests.request("POST", url, json=payload, headers=headers)
     try:
-        for hotel_id_value in response.json()["data"]["body"]["searchResults"]["results"]:
+        for hotel_id_value in response.json()["data"]["propertySearch"]["properties"]:
             try:
                 hotel_id = hotel_id_value["id"]
                 hotel_name = hotel_id_value["name"]
-                hotel_address = hotel_id_value["address"]["streetAddress"]
-                distance_from_center = hotel_id_value["landmarks"][0]["distance"]
+                hotel_address = get_address_info(hotel_id)
+                distance_from_center = hotel_id_value["destinationInfo"]["distanceFromDestination"]["value"]
                 days = date_out - date_in
-                price_one_day = hotel_id_value["ratePlan"]["price"]["current"]
+                price_one_day = hotel_id_value["price"]["options"][0]["formattedDisplayPrice"]
                 num = re.findall(r'\d+', price_one_day)
-                sum_price = days.days * int(num[0] + num[1])
-                all_days_price = re.sub(r'(?<=\d)(?=(\d{3})+\b)', ',', str(sum_price)) + price_one_day[-4:]
+                sum_price = days.days * int(num[0])
+                all_days_price = str(sum_price) + "$"
                 hotel_url = 'https://www.hotels.com/h' + str(hotel_id) + '.Hotel-Information/'
                 msg = (f"<b>Отель: {hotel_name}\n"
                        f"Адрес: {hotel_address}\n"
-                       f"Расстояние до центра: {distance_from_center}\n"
+                       f"Расстояние до центра: {distance_from_center} км\n"
                        f"Цена за 1 сутки: {price_one_day}\n"
                        f"Стоимость за {days.days} суток: {all_days_price}\n"
                        f"Подробнее об отеле: {hotel_url}\n</b>")
@@ -102,11 +129,11 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
                     yield result, photos, [text]
                 else:
                     yield [msg]
-            except KeyError:
-                pass
+            except Exception as exp:
+                print(exp)
     except Exception as exp:
         print('Не удалось подключиться к серверу.', exp)
-        return None
+        yield None
 
 
 @logger.catch()
@@ -114,12 +141,12 @@ def get_hotels_info_bestdeal(city_id: str, hotels_count: str, date_in: date,
                              date_out: date, distance: float, price: str,
                              photo_count: int = 0, command: str = "bestdeal"):
     """
-    Функция отправляет запрос на заданный url с заданными параметрами, десериализует, обрабатывает результат
-    и получает информацию об отелях в городе, найденном по его id в разделе "bestdeal".
+    Функция отправляет запрос на заданный url с заданными параметрами, полученными из payload, десериализует, обрабатывает
+    результат и получает информацию об отелях в городе.
     Если пользователь ввел запрос с нахождением фотографий, то редактирует текст, согласно найденной информации об отеле
     и вызывает функцию, которая ищет фотографии отеля и возвращает их в готовом для вывода виде. И считает количество найденных отелей.
     Если пользователь ищет без фотографий, то возвращает текст поиска в виде списка, чтобы корректно его обработать в БД.
-    Если количество фотографий и количество найденных отелей равно 0: возвращает None.
+    Если количество фотографий равно нулю и количество найденных отелей меньше разыскиваемых: возвращает сообщение об этом.
     :param city_id: (str) id города, в котором пользователь ищет отели.
     :param hotels_count: (str) разыскиваемое количество отелей в городе.
     :param date_in: (date) дата въезда в отель.
@@ -134,35 +161,36 @@ def get_hotels_info_bestdeal(city_id: str, hotels_count: str, date_in: date,
     :return: text: List[str]] текст сообщения, если запрос без фотографий.
     :return: None
     """
-    url = "https://hotels4.p.rapidapi.com/properties/list"
-    querystring = {"destinationId": str(city_id), "pageNumber": "1", "pageSize": "25", "checkIn": str(date_in),
-                   "checkOut": str(date_out), "adults1": "1", "sortOrder": "PRICE", "locale": "ru_RU",
-                   "currency": "RUB"}
+    url = "https://hotels4.p.rapidapi.com/properties/v2/list"
+    payload = payloads.bestdeal_payload(city_id, int(hotels_count), int(price), str(date_in), str(date_out))
+    headers = {
+        "content-type": "application/json",
+        "X-RapidAPI-Key": config.RAPID_API_KEY,
+        "X-RapidAPI-Host": "hotels4.p.rapidapi.com"
+    }
 
-    response = requests.get(url, headers=api_headers, params=querystring)
+    response = requests.request("POST", url, json=payload, headers=headers)
 
     hotels_counter = 0  # счётчик количества найденных отелей.
 
-    for hotel_id_value in response.json()["data"]["body"]["searchResults"]["results"]:
+    for hotel_id_value in response.json()["data"]["propertySearch"]["properties"]:
         try:
             if hotels_counter == int(hotels_count):
                 break
             hotel_id = hotel_id_value["id"]
             hotel_name = hotel_id_value["name"]
-            hotel_address = hotel_id_value["address"]["streetAddress"]
-            distance_from_center = hotel_id_value["landmarks"][0]["distance"]
+            hotel_address = get_address_info(hotel_id)
+            distance_from_center = hotel_id_value["destinationInfo"]["distanceFromDestination"]["value"]
             days = date_out - date_in
-            price_one_day = hotel_id_value["ratePlan"]["price"]["current"]
+            price_one_day = hotel_id_value["price"]["options"][0]["formattedDisplayPrice"]
             num = re.findall(r'\d+', price_one_day)
-            sum_price = days.days * int(num[0] + num[1])
-            all_days_price = re.sub(r'(?<=\d)(?=(\d{3})+\b)', ',', str(sum_price)) + price_one_day[-4:]
-            hotel_url = 'https://www.hotels.com/ho' + str(hotel_id) + '/'
-            if not int(num[0] + num[1]) >= int(price) and not float(
-                    distance_from_center[:-3].replace(',', '.')) >= float(distance):
-
+            sum_price = days.days * int(num[0])
+            all_days_price = str(sum_price) + "$"
+            hotel_url = 'https://www.hotels.com/h' + str(hotel_id) + '.Hotel-Information/'
+            if not float(distance_from_center) >= float(distance):
                 msg = (f"<b>Отель: {hotel_name}\n"
                        f"Адрес: {hotel_address}\n"
-                       f"Расстояние до центра: {distance_from_center}\n"
+                       f"Расстояние до центра: {distance_from_center} км\n"
                        f"Цена за 1 сутки: {price_one_day}\n"
                        f"Стоимость за {days.days} суток: {all_days_price}\n"
                        f"Подробнее об отеле: {hotel_url}\n</b>")
@@ -177,8 +205,8 @@ def get_hotels_info_bestdeal(city_id: str, hotels_count: str, date_in: date,
                     yield [msg]
         except Exception:
             pass
-    if photo_count == 0 and hotels_counter == 0:
-        return None
+    if photo_count == 0 and hotels_counter < int(hotels_count):
+        yield "Это всё, что удалось найти🤷‍♂"
 
 
 @logger.catch()
@@ -193,18 +221,17 @@ def get_city_name_and_id(city: str) -> Union[List[Dict[str, str]], None]:
     :param city: (str) название города введенное с клавиатуры пользователем.
     :return: cities or None: Union[List[str, str], None] список с названиями городов и их id или None.
     """
-    url = "https://hotels4.p.rapidapi.com/locations/v2/search"
-    querystring = {"query": city, "locale": "ru_RU", "currency": "USD"}
+    url = "https://hotels4.p.rapidapi.com/locations/v3/search"
+    querystring = {"q": city, "locale": "ru_RU"}
     hotels_api = requests.get(url, headers=api_headers, params=querystring)
     if hotels_api.status_code == 200:
         cities = list()
         try:
-            for elem in hotels_api.json()["suggestions"][0]["entities"]:
+            for elem in hotels_api.json()["sr"]:
                 if elem["type"] == "CITY":
-                    pattern = r'\<(/?[^>]+)>'
-                    city_clear_name = re.sub(pattern, '', elem['caption'])
+                    city_clear_name = elem['regionNames']['fullName']
                     cities.append({'city_name': city_clear_name,
-                                   'destination_id': elem['destinationId']
+                                   'destination_id': elem['gaiaId']
                                    }
                                   )
         except Exception:
