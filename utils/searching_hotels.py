@@ -63,7 +63,8 @@ def get_address_info(hotel_id: str):
 
 
 @logger.catch()
-def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date, date_out: date, photo_count: int = 0):
+def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date, date_out: date,
+                    distance: float = 0, price: int = 0, photo_count: int = 0):
     """
     Функция отправляет запрос на заданный url с заданными параметрами, полученными из payload, десериализует, обрабатывает
     результат и получает информацию об отелях в городе.
@@ -76,6 +77,8 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
     :param hotels_count: (str) разыскиваемое количество отелей в городе.
     :param date_in: (date) дата въезда в отель.
     :param date_out: (date) дата выезда из отеля.
+    :param distance: (float) желаемое расстояние отеля от центра города.
+    :param price: (str) желаемая стоимость ночи в отеле.
     :param photo_count: (int) количество фотографий отеля.
 
     :return: result, photos, text: Union[List[InputMediaPhoto], List[str], List[str]] фотографии для отправки, список с
@@ -84,12 +87,20 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
     :return: None
     """
     url = "https://hotels4.p.rapidapi.com/properties/v2/list"
-    payload = payloads.low_high_price_payload(command, city_id, hotels_count, str(date_in), str(date_out))
+
+    if command != "bestdeal":
+        payload = payloads.low_high_price_payload(command, city_id, hotels_count, str(date_in), str(date_out))
+    else:
+        payload = payloads.bestdeal_payload(city_id, int(hotels_count), int(price), str(date_in), str(date_out))
 
     response = requests.request("POST", url, json=payload, headers=api_headers)
+
+    hotels_counter = 0  # счётчик количества найденных отелей.
     try:
         for hotel_id_value in response.json()["data"]["propertySearch"]["properties"]:
             try:
+                if hotels_counter == int(hotels_count):
+                    break
                 hotel_id = hotel_id_value["id"]
                 hotel_name = hotel_id_value["name"]
                 hotel_address = get_address_info(hotel_id)
@@ -100,91 +111,30 @@ def get_hotels_info(command: str, city_id: str, hotels_count: str, date_in: date
                 sum_price = days.days * int(num[0])
                 all_days_price = str(sum_price) + "$"
                 hotel_url = 'https://www.hotels.com/h' + str(hotel_id) + '.Hotel-Information/'
-                msg = (f"<b>Отель: {hotel_name}\n"
-                       f"Адрес: {hotel_address}\n"
-                       f"Расстояние до центра: {distance_from_center} км\n"
-                       f"Цена за 1 сутки: {price_one_day}\n"
-                       f"Стоимость за {days.days} суток: {all_days_price}\n"
-                       f"Подробнее об отеле: {hotel_url}\n</b>")
-                if int(photo_count) > 0:
-                    text = msg.replace("<b>", '').replace("</b>", '')
-                    result, photos = get_result_with_photos(hotel_id, photo_count, text)
-                    yield result, photos, [text]
+                if float(distance_from_center) <= float(distance) and command == "bestdeal":
+                    continue
                 else:
-                    yield [msg]
+                    msg = (f"<b>Отель: {hotel_name}\n"
+                           f"Адрес: {hotel_address}\n"
+                           f"Расстояние до центра: {distance_from_center} км\n"
+                           f"Цена за 1 сутки: {price_one_day}\n"
+                           f"Стоимость за {days.days} суток: {all_days_price}\n"
+                           f"Подробнее об отеле: {hotel_url}\n</b>")
+                    if photo_count > 0:
+                        hotels_counter += 1
+                        text = msg.replace("<b>", '').replace("</b>", '')
+                        result, photos = get_result_with_photos(hotel_id, photo_count, text)
+                        yield result, photos, [text]
+                    else:
+                        hotels_counter += 1
+                        yield [msg]
             except Exception as exp:
                 print(exp)
+        if photo_count == 0 and hotels_counter < int(hotels_count):
+            yield "Это всё, что удалось найти🤷‍♂"
     except Exception as exp:
         print('Не удалось подключиться к серверу.', exp)
         yield None
-
-
-@logger.catch()
-def get_hotels_info_bestdeal(city_id: str, hotels_count: str, date_in: date,
-                             date_out: date, distance: float, price: str,
-                             photo_count: int = 0, command: str = "bestdeal"):
-    """
-    Функция отправляет запрос на заданный url с заданными параметрами, полученными из payload, десериализует, обрабатывает
-    результат и получает информацию об отелях в городе.
-    Если пользователь ввел запрос с нахождением фотографий, то редактирует текст, согласно найденной информации об отеле
-    и вызывает функцию, которая ищет фотографии отеля и возвращает их в готовом для вывода виде. И считает количество найденных отелей.
-    Если пользователь ищет без фотографий, то возвращает текст поиска в виде списка, чтобы корректно его обработать в БД.
-    Если количество фотографий равно нулю и количество найденных отелей меньше разыскиваемых: возвращает сообщение об этом.
-    :param city_id: (str) id города, в котором пользователь ищет отели.
-    :param hotels_count: (str) разыскиваемое количество отелей в городе.
-    :param date_in: (date) дата въезда в отель.
-    :param date_out: (date) дата выезда из отеля.
-    :param distance: (float) желаемое расстояние отеля от центра города.
-    :param price: (str) желаемая стоимость ночи в отеле.
-    :param photo_count: (int) количество фотографий отеля.
-    :param command: (str) название выбранной операции поиска.
-
-    :return: result, photos, text: Union[List[InputMediaPhoto], List[str], List[str]] фотографии для отправки, список с
-    url фотографий, текст сообщения, если запрос с фотографиями.
-    :return: text: List[str]] текст сообщения, если запрос без фотографий.
-    :return: None
-    """
-    url = "https://hotels4.p.rapidapi.com/properties/v2/list"
-    payload = payloads.bestdeal_payload(city_id, int(hotels_count), int(price), str(date_in), str(date_out))
-
-    response = requests.request("POST", url, json=payload, headers=api_headers)
-
-    hotels_counter = 0  # счётчик количества найденных отелей.
-
-    for hotel_id_value in response.json()["data"]["propertySearch"]["properties"]:
-        try:
-            if hotels_counter == int(hotels_count):
-                break
-            hotel_id = hotel_id_value["id"]
-            hotel_name = hotel_id_value["name"]
-            hotel_address = get_address_info(hotel_id)
-            distance_from_center = hotel_id_value["destinationInfo"]["distanceFromDestination"]["value"]
-            days = date_out - date_in
-            price_one_day = hotel_id_value["price"]["options"][0]["formattedDisplayPrice"]
-            num = re.findall(r'\d+', price_one_day)
-            sum_price = days.days * int(num[0])
-            all_days_price = str(sum_price) + "$"
-            hotel_url = 'https://www.hotels.com/h' + str(hotel_id) + '.Hotel-Information/'
-            if not float(distance_from_center) >= float(distance):
-                msg = (f"<b>Отель: {hotel_name}\n"
-                       f"Адрес: {hotel_address}\n"
-                       f"Расстояние до центра: {distance_from_center} км\n"
-                       f"Цена за 1 сутки: {price_one_day}\n"
-                       f"Стоимость за {days.days} суток: {all_days_price}\n"
-                       f"Подробнее об отеле: {hotel_url}\n</b>")
-
-                if int(photo_count) > 0:
-                    hotels_counter += 1
-                    text = msg.replace("<b>", '').replace("</b>", '')
-                    result, photos = get_result_with_photos(hotel_id, photo_count, text)
-                    yield result, photos, [text]
-                else:
-                    hotels_counter += 1
-                    yield [msg]
-        except Exception:
-            pass
-    if photo_count == 0 and hotels_counter < int(hotels_count):
-        yield "Это всё, что удалось найти🤷‍♂"
 
 
 @logger.catch()
@@ -229,22 +179,6 @@ def print_cities(cities: Union[List[Dict[str, str]]]) -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardMarkup(row_width=1)
     for city in cities:
         keyboard.add(InlineKeyboardButton(text=city['city_name'], callback_data=f'city_id:{city["destination_id"]}'))
-
-    keyboard.add(InlineKeyboardButton(text="Выйти в меню", callback_data='exit'))
-    return keyboard
-
-
-@logger.catch()
-def print_cities_bestdeal(cities: Union[List[Dict[str, str]]]) -> InlineKeyboardMarkup:
-    """
-    Клавиатура с кнопками - выбор подходящего по названию города, из которых пользователь выбирает нужный ему.
-    :param cities_dict: словарь с названиями городов и их id.
-    :return: клавиатура InlineKeyboardMarkup.
-    """
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    for city in cities:
-        keyboard.add(InlineKeyboardButton(text=city['city_name'],
-                                          callback_data=f'bestdeal_id:{city["destination_id"]}'))
 
     keyboard.add(InlineKeyboardButton(text="Выйти в меню", callback_data='exit'))
     return keyboard
