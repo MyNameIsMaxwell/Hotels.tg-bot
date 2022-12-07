@@ -1,4 +1,14 @@
+# -*- coding: utf-8 -*-
 def low_high_price_payload(command, city_id, hotels_count, date_in, date_out):
+	"""
+	Функция, которая возвращает условия поиска в виде словаря для дальнейшей обработки requests.
+    :param command: (str) название выбранной операции поиска.
+    :param city_id: (str) id города, в котором пользователь ищет отели.
+    :param hotels_count: (str) разыскиваемое количество отелей в городе.
+    :param date_in: (date) дата въезда в отель.
+    :param date_out: (date) дата выезда из отеля.
+	:return: dict
+	"""
 	year_in, month_in, day_in = date_in.split("-")
 	if day_in[0] == '0':
 		day_in = day_in[1]
@@ -56,7 +66,7 @@ def low_high_price_payload(command, city_id, hotels_count, date_in, date_out):
 				}
 			],
 			"resultsStartingIndex": 0,
-			"resultsSize": hotels_count,
+			"resultsSize": int(hotels_count),
 			"sort": "PRICE_HIGH_TO_LOW"
 		}
 		return highprice_payload
